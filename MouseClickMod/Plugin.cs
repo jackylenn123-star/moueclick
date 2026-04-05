@@ -19,6 +19,10 @@ namespace MouseClickMod
         private Vector3 originalHandScale;
         private bool hasOriginalScale = false;
 
+        // Click cooldown — prevents repeated presses while holding the mouse button
+        private float lastClickTime = -999f;
+        private const float ClickCooldown = 0.3f;
+
         // GUI toggle button dimensions
         private readonly Rect toggleRect = new Rect(10f, 10f, 80f, 20f);
 
@@ -73,8 +77,10 @@ namespace MouseClickMod
 
             RaycastHit? bestHit = FindBestHit(allHits);
 
-            if (bestHit.HasValue && Mouse.current.leftButton.isPressed)
+            if (bestHit.HasValue && Mouse.current.leftButton.isPressed
+                && Time.time - lastClickTime >= ClickCooldown)
             {
+                lastClickTime = Time.time;
                 rightHandTriggerCollider.position = bestHit.Value.point;
                 rightHandTriggerCollider.localScale = Vector3.one * 0.02f;
             }
