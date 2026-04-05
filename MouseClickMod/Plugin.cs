@@ -21,9 +21,24 @@ namespace MouseClickMod
 
         // Visual cursor sphere
         private GameObject cursorSphere;
+        private Renderer cursorRenderer;
 
         // GUI toggle button dimensions - bigger and visible
         private readonly Rect toggleRect = new Rect(10f, 10f, 120f, 30f);
+
+        // Component type names we consider "pressable" — checked by name so we don't
+        // need hard assembly references to every button type.
+        private static readonly string[] ButtonTypeNames = new[]
+        {
+            "GorillaPressableButton",
+            "GorillaKeyboardButton",
+            "GorillaKeyboardButtonNew",
+            "GorillaTagButton",
+            "GorillaColorizableButton",
+            "GorillaColorButton",
+            "UnityEngine.UI.Button",
+            "Button",
+        };
 
         private new ManualLogSource Logger => base.Logger;
 
@@ -43,9 +58,9 @@ namespace MouseClickMod
             cursorSphere.transform.localScale = Vector3.one * 0.07f;
             Destroy(cursorSphere.GetComponent<Collider>());
 
-            Renderer rend = cursorSphere.GetComponent<Renderer>();
-            rend.material = new Material(Shader.Find("GUI/Text Shader"));
-            rend.material.color = Color.clear;
+            cursorRenderer = cursorSphere.GetComponent<Renderer>();
+            cursorRenderer.material = new Material(Shader.Find("GUI/Text Shader"));
+            cursorRenderer.material.color = Color.clear;
             cursorSphere.SetActive(false);
         }
 
@@ -67,32 +82,33 @@ namespace MouseClickMod
                 return;
             }
 
-            // Get the main camera - try multiple approaches
             Camera cam = GetGameCamera();
             if (cam == null) return;
 
             Ray ray = cam.ScreenPointToRay(Mouse.current.position.ReadValue());
 
-            if (Physics.Raycast(ray, out RaycastHit hit, 512f))
+            // Cast through ALL colliders (including triggers) so we can skip barriers
+            RaycastHit[] allHits = Physics.RaycastAll(ray, 512f, Physics.AllLayers, QueryTriggerInteraction.Collide);
+
+            // Sort by distance ascending
+            System.Array.Sort(allHits, (a, b) => a.distance.CompareTo(b.distance));
+
+            RaycastHit? bestHit = FindBestHit(allHits);
+
+            if (bestHit.HasValue)
             {
                 cursorSphere.SetActive(true);
-                cursorSphere.transform.position = hit.point;
-
-                Renderer rend = cursorSphere.GetComponent<Renderer>();
+                cursorSphere.transform.position = bestHit.Value.point;
 
                 if (Mouse.current.leftButton.isPressed)
                 {
-                    // Show magenta cursor when clicking
-                    rend.material.color = Color.magenta;
-
-                    // Move the hand trigger collider to the hit point to press buttons
-                    rightHandTriggerCollider.position = hit.point;
+                    cursorRenderer.material.color = Color.magenta;
+                    rightHandTriggerCollider.position = bestHit.Value.point;
                     rightHandTriggerCollider.localScale = Vector3.one * 0.07f;
                 }
                 else
                 {
-                    // Show semi-transparent white cursor when hovering
-                    rend.material.color = new Color(1f, 1f, 1f, 0.4f);
+                    cursorRenderer.material.color = new Color(1f, 1f, 1f, 0.4f);
                 }
             }
             else
@@ -100,6 +116,74 @@ namespace MouseClickMod
                 if (cursorSphere.activeSelf)
                     cursorSphere.SetActive(false);
             }
+        }
+
+        /// <summary>
+        /// Walk through hits (nearest first) and return the first one that:
+        ///   1. Has a known button component on it or any parent, OR
+        ///   2. Is the closest non-invisible solid hit if no button is found at all.
+        /// Invisible barriers are identified as non-Renderer, non-button colliders.
+        /// </summary>
+        private RaycastHit? FindBestHit(RaycastHit[] hits)
+        {
+            if (hits.Length == 0) return null;
+
+            RaycastHit? fallback = null;
+
+            foreach (RaycastHit hit in hits)
+            {
+                GameObject go = hit.collider.gameObject;
+
+                // Skip the cursor sphere itself
+                if (go == cursorSphere) continue;
+
+                // Skip the player's own body colliders
+                if (IsPlayerCollider(go)) continue;
+
+                if (IsButtonObject(go))
+                    return hit; // Found a button — use it immediately
+
+                // Store first non-player, non-button hit as fallback
+                if (fallback == null)
+                    fallback = hit;
+            }
+
+            // No button hit found — return closest non-player object as fallback
+            return fallback;
+        }
+
+        private bool IsButtonObject(GameObject go)
+        {
+            // Walk up the hierarchy up to 3 levels looking for a button component
+            Transform t = go.transform;
+            for (int i = 0; i < 4 && t != null; i++)
+            {
+                foreach (Component comp in t.GetComponents<Component>())
+                {
+                    if (comp == null) continue;
+                    string typeName = comp.GetType().Name;
+                    foreach (string btn in ButtonTypeNames)
+                    {
+                        if (typeName == btn) return true;
+                    }
+                }
+                t = t.parent;
+            }
+            return false;
+        }
+
+        private bool IsPlayerCollider(GameObject go)
+        {
+            // Skip anything that is part of the local player hierarchy
+            Transform t = go.transform;
+            while (t != null)
+            {
+                if (t.name == "GorillaPlayer" || t.name == "Player VR Controller"
+                    || t.name == "Player Objects")
+                    return true;
+                t = t.parent;
+            }
+            return false;
         }
 
         void OnGUI()
