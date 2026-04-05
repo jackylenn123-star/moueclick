@@ -1,11 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
     <AssemblyName>MouseClickMod</AssemblyName>
     <RootNamespace>MouseClickMod</RootNamespace>
     <Nullable>disable</Nullable>
     <LangVersion>8.0</LangVersion>
+    <!-- Suppress the netstandard version conflict warning that appears with net472 + Unity DLLs -->
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
   </PropertyGroup>
 
   <!--
