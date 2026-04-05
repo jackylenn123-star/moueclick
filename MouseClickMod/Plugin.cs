@@ -19,12 +19,8 @@ namespace MouseClickMod
         private Vector3 originalHandScale;
         private bool hasOriginalScale = false;
 
-        // Visual cursor sphere
-        private GameObject cursorSphere;
-        private Renderer cursorRenderer;
-
-        // GUI toggle button dimensions - bigger and visible
-        private readonly Rect toggleRect = new Rect(10f, 10f, 120f, 30f);
+        // GUI toggle button dimensions
+        private readonly Rect toggleRect = new Rect(10f, 10f, 80f, 20f);
 
         // Component type names we consider "pressable" — checked by name so we don't
         // need hard assembly references to every button type.
@@ -51,24 +47,10 @@ namespace MouseClickMod
         void Start()
         {
             GorillaTagger.OnPlayerSpawned(OnPlayerSpawn);
-
-            // Create a persistent cursor sphere (hidden by default)
-            cursorSphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            cursorSphere.name = "MouseClickCursor";
-            cursorSphere.transform.localScale = Vector3.one * 0.07f;
-            Destroy(cursorSphere.GetComponent<Collider>());
-
-            cursorRenderer = cursorSphere.GetComponent<Renderer>();
-            cursorRenderer.material = new Material(Shader.Find("GUI/Text Shader"));
-            cursorRenderer.material.color = Color.clear;
-            cursorSphere.SetActive(false);
         }
 
         void OnDestroy()
         {
-            if (cursorSphere != null)
-                Destroy(cursorSphere);
-
             // Re-enable TransformFollow if we disabled it
             RestoreHandFollow();
         }
@@ -76,11 +58,7 @@ namespace MouseClickMod
         void Update()
         {
             if (!mouseClickEnabled || rightHandTriggerCollider == null)
-            {
-                if (cursorSphere != null && cursorSphere.activeSelf)
-                    cursorSphere.SetActive(false);
                 return;
-            }
 
             Camera cam = GetGameCamera();
             if (cam == null) return;
@@ -95,26 +73,10 @@ namespace MouseClickMod
 
             RaycastHit? bestHit = FindBestHit(allHits);
 
-            if (bestHit.HasValue)
+            if (bestHit.HasValue && Mouse.current.leftButton.isPressed)
             {
-                cursorSphere.SetActive(true);
-                cursorSphere.transform.position = bestHit.Value.point;
-
-                if (Mouse.current.leftButton.isPressed)
-                {
-                    cursorRenderer.material.color = Color.magenta;
-                    rightHandTriggerCollider.position = bestHit.Value.point;
-                    rightHandTriggerCollider.localScale = Vector3.one * 0.07f;
-                }
-                else
-                {
-                    cursorRenderer.material.color = new Color(1f, 1f, 1f, 0.4f);
-                }
-            }
-            else
-            {
-                if (cursorSphere.activeSelf)
-                    cursorSphere.SetActive(false);
+                rightHandTriggerCollider.position = bestHit.Value.point;
+                rightHandTriggerCollider.localScale = Vector3.one * 0.02f;
             }
         }
 
@@ -133,9 +95,6 @@ namespace MouseClickMod
             foreach (RaycastHit hit in hits)
             {
                 GameObject go = hit.collider.gameObject;
-
-                // Skip the cursor sphere itself
-                if (go == cursorSphere) continue;
 
                 // Skip the player's own body colliders
                 if (IsPlayerCollider(go)) continue;
@@ -195,14 +154,6 @@ namespace MouseClickMod
             if (GUI.Button(toggleRect, mouseClickEnabled ? "Mouse Click: ON" : "Mouse Click: OFF"))
             {
                 mouseClickEnabled = !mouseClickEnabled;
-
-                if (!mouseClickEnabled)
-                {
-                    // Hide cursor sphere when disabled
-                    if (cursorSphere != null)
-                        cursorSphere.SetActive(false);
-                }
-
                 Logger.LogInfo($"MouseClick toggled: {mouseClickEnabled}");
             }
 
